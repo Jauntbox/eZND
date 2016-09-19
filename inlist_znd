@@ -1,0 +1,269 @@
+&inlist_znd
+
+	!Set the path to your MESA installation here:
+	!my_mesa_dir = '/Users/Kevin/mesa'
+	!my_mesa_dir = '/Users/Kevin/mesa_5271'
+	my_mesa_dir = '/Users/Kevin/mesa_5819'
+
+	!Pick a nuclear reaction network:
+	!net_file = 'cno_extras_plus_fe56.net'
+	!net_file = 'approx13.net'
+	!net_file = 'approx13-2.net'
+	!net_file = 'approx13-3.net'
+	!net_file = 'approx13_forward.net'
+	!net_file = 'approx19.net'      !Not working (unsure why) - last checked 11/4/15
+	!net_file = 'approx20.net'
+	!net_file = '88_iso.net'
+	net_file = '89_iso.net'
+	!net_file = '136_iso.net'
+	!net_file = '206_iso.net'
+	!net_file = 'big_he_burn.net'
+	!net_file = 'alpha_ni56.net'
+	!net_file = 'he4_to_c12.net'
+	!-------------------------------------------------------------------------------------
+
+	!Ambient conditions:
+	rho0 = 5d5
+	t0 = 1d8	!also t_b in WD mode
+
+	!Conditions if mapping to an envelope on a white dwarf:
+	m_c = 0.5	!(msun)
+	!m_wd = 2.40d33	!(msun = 1.99d33 g)
+	!r_wd = 6.37d8	!(r_earth =  6.37d8 cm)
+	grav_init = 0d0		!cm/s^2
+
+	!Initial composition:
+	!Fiducial for ignition paper:
+	!num_isos_for_Xinit = 4
+	!names_of_isos_for_Xinit(1) = 'he4'
+	!values_for_Xinit(1) = 0.891d0
+	!names_of_isos_for_Xinit(2) = 'c12'
+	!values_for_Xinit(2) = 0.050d0
+	!names_of_isos_for_Xinit(3) = 'o16'
+	!values_for_Xinit(3) = 0.050d0
+	!names_of_isos_for_Xinit(4) = 'n14'
+	!values_for_Xinit(4) = 0.009d0
+
+	!num_isos_for_Xinit = 3
+	!names_of_isos_for_Xinit(1) = 'he4'
+	!values_for_Xinit(1) = 0.9d0
+	!names_of_isos_for_Xinit(2) = 'c12'
+	!values_for_Xinit(2) = 0.050d0
+	!names_of_isos_for_Xinit(3) = 'o16'
+	!values_for_Xinit(3) = 0.050d0
+
+	num_isos_for_Xinit = 1
+	names_of_isos_for_Xinit(1) = 'he4'
+	values_for_Xinit(1) = 1d0
+	!-------------------------------------------------------------------------------------
+	
+	!Pick a detonation velocity:
+	!If true, calculate the CJ velocity assuming a final state defined below
+	do_cj = .false.
+	!cj_final_iso = 'ni56'		!pure cj_final_iso (depreciated)
+
+	!CJ state composition:
+	num_isos_for_Xcj = 2
+	names_of_isos_for_Xcj(1) = 'ni56'
+	values_for_Xcj(1) = 1.0
+	names_of_isos_for_Xcj(2) = 'si28'
+	values_for_Xcj(2) = 0.0
+
+	!If true, calculate Neumann conditions as the initial conditions for the integration 
+	!from the ambient conditions and a user specified v_det (cm/s)
+	do_neumann = .true.
+	!v_det = 8.41790d8
+	v_det = 1.20d9
+
+	!Otherwise, we'll hardcode the following values as the Neumann point:
+	!burn_rho = 2d6		!g/cc
+	!burn_t = 3d9		!K
+	!burn_u = 3.345d8	!cm/s
+
+	!Pick a fraction of the total energy release to use for calculating the burning 
+	!length scale, l_burn
+	l_burn_factor = 0.95
+	!-------------------------------------------------------------------------------------
+
+	!Choose what type of ZND equations to integrate (eg. standard, blowout, curvature)
+	!Pick at most ONE of the boolean flags in this section to be true (all false will
+	!use the standard ZND equations).
+
+	!Use standard (scale height dependent) blowout equations:
+	do_blowout = .true.
+
+	!Use local blowout equations (not used in paper - experimental):
+	do_blowout_local = .false.
+	delta_y_init = 1d4	!cm
+
+	!Parameters used in either do_blowout or do_blowout_local
+	h_scale = 1d7			!cm
+	uy_init = 0d0			!cm/s
+	use_uy_ux_ratio = .false.		!if true, then set uy_init = ux_init*uy_ux_ratio
+	uy_ux_ratio = 0.75
+	use_const_uy = .false.			!Don't allow uy to vary
+
+	!Use curvature equations:
+	do_curvature = .true.
+	use_he_clavin = .true.			!False: use my prescription (track R_c(xi)), True: use He & Clavin's prescription
+	r_curve = 3d9					!Radius of curvature (cm)
+	j_curve = 1						!Geometry choice (0: plane parallel, 1: cylindrical, 2: spherical)
+	use_rc_hs_scaling = .true.		!False: use constant r_curve above, True: use R_c = rc_hs_factor*H_s 
+	rc_hs_factor = 3.0				!R_c = rc_hs_factor*H_s (R_c ~ 3*d, d~5*H_s)
+	!-------------------------------------------------------------------------------------
+
+	!Choose which mode you want to run the program in (eg. a single integration, a batch
+	!of detonation velocities for making plots, etc.)
+	!Pick ONE of the following flags to be true:
+
+	!Only calculate the CJ state, sweeping through densities as given in the rho_sweep
+	!section below - don't calculate any burning.
+	do_cjstate_only = .false.
+
+	!Run a burn at a specified constant pressure
+	do_constp = .false.
+
+	!Run a single ZND integration
+	do_znd = .false. 	
+
+	!Given a v_det, search for a h_scale value that will make v_det a generalized CJ velocity:
+	do_h_search = .false.
+
+	!Given an h_scale, search for a v_det value that will make v_det a generalized CJ velocity:
+	do_vdet_search = .false.
+
+	!Iterate through v_det values, calculating the max mach number, sonic point location, etc. for each velocity:
+	do_sweep = .false.
+
+	!If true, sweep through v_det values, finding the h_scale value where you can just barely avoid hitting a sonic point, and computing l_znd with that
+	do_lznd_vdet = .false.	
+
+	!If true, sweep M_env values at fixed M_c, finding the h_scale value where you can just barely avoid hitting a sonic point, and computing l_znd with that
+	do_lznd_wd = .true.
+
+	!Read in a previously made file with v_det and h_scale's for a single composition and recompute the other data (if something went wrong)
+	do_reconstruct_lznd_vdet = .false. 
+	reconstruct_lznd_vdet_infile = './curvature_runs/lznd_data/he80_c10_o10/r30d5_t1d8_rchs3_blowout_pathological.data'	!File to read in
+	reconstruct_lznd_vdet_outfile = './curvature_runs/lznd_data/he80_c10_o10/r30d5_t1d8_rchs3_blowout_pathological_wd.data'	!File to output
+
+	!If true, sweep through densities and calculate the generalized CJ detonation at a fixed
+	!gravity and fixed initial temperature. The layer thickness is computed using P/(rho*g)
+	!and then multiplied by the corresponding factor to convert it to our scale height parameter
+	!(for constant densities, we found d = 5*H_s)
+	do_rho_sweep = .false.
+
+	do_pathological = .true.
+
+	!If true, sweep through compositions (hardcoded for now), for a fixed h_scale and computing l_znd with that (down to when you hit a sonic point)
+	!do_lznd_comp = .false. !(not yet implemented...)
+	!-------------------------------------------------------------------------------------
+
+	!Output controls:
+
+	!Output file name (used for a single ZND integration):
+	!output_profile_name='./diagnosis_runs/rho0_5d5_t0_1d8-approx13-2_blowout.data'
+	!output_profile_name='./comparison_runs/approx13_r5d6_CJ_search.data'
+	!output_profile_name='./comparison_runs/approx19_r2d5_v682e6_he80_c10_o10.data'
+	!output_profile_name='./comparison_runs/approx19_blowout_curvature_pathological.data'
+	!output_profile_name='./comparison_runs/approx19_r5d5_he100_cj.data'
+	!output_profile_name='./ignition_runs/89iso_r5d5_h1d7_c05_o05_n009.data'
+	!output_profile_name='./ignition_runs/test_Tlimits_206iso.data'
+
+	!output_profile_name='./comparison_runs/approx19_he95_o05_cj_tosi28.data'
+	!output_profile_name='./comparison_runs/136iso_he98_c1402_h25d6.data'
+	!output_profile_name='./comparison_runs/noneigen_blowout_only.data'
+	!output_profile_name='./comparison_runs/pathological/r5d5_t1d8_he100_hs1d7_rc3d7_veigen.data'
+	!output_profile_name='comparison_runs/pathological/r5d5_t1d8_he100_hs1d7_hsrc3_veigen.data'
+	!output_profile_name='./diagnosis_runs/r5d5_t1d8_v110d7_he100_hs1d7.data'
+
+	!File name for sweeps through detonation velocity:
+	!output_sweep_name='./blowout_runs/vdet_sweeps/r5d5_t1d8_he90_c10_hs1d6.data'
+	!output_sweep_name='./curvature_runs/vdet_sweeps/r5d5_t1d8_he90_c10_rc5d7.data'
+	!output_sweep_name='./vdet_sweeps/r5d5_t1d8_h100.data'
+	!output_sweep_name='./curvature_runs/lznd_data/r5d5_t1d8_he80_c20_rchs3_blowout_pathological.data'
+	!output_sweep_name='./curvature_runs/lznd_data/he80_c10_o10/mwd120_t1d8_rchs3_blowout_pathological_mesa.data'
+	!output_sweep_name='./curvature_runs/lznd_data/mwd100_t1d8_rchs3_blowout_pathological_mesa_88iso_aj.data'
+	!output_sweep_name='./curvature_runs/lznd_data_hyades/he100/mwd050_t1d8_rchs3_blowout_pathological_mesa_approx19.data'
+	!output_sweep_name='./rho_sweeps/t1d8_he100_lburn95_cj_search_long_approx13.data'
+	!output_sweep_name='./rho_sweeps/t1d7_he100_naive_cj.data'
+	!output_sweep_name='./curvature_runs/lznd_data/r5d5_t1d8_he100_rchs3.data'
+	output_sweep_name='output_test.data'
+	!-------------------------------------------------------------------------------------
+
+	!Settings for do_rho_sweep:
+	d_hs_scaling = 1.0			!d = d_hs_scaling*h_scale
+	!rho_sweep_T0 = 1d7			!Initial temerature (for calculating scale height) - depreciated
+	!rho_sweep_grav = 3d8		!cm/s^2 (M_sun in R_earth is 3.3d8 cm/s^2) - depreciated
+	rho_sweep_log_min = 5.0		!Lowest density to use
+	rho_sweep_log_max = 7.0		!Highest density to use
+	rho_sweep_num_steps = 50	!Number of steps in density to take
+
+	!How many velocity steps to make if do_sweep is true:
+	sweep_znd_iters = 100
+	!sweep_znd_iters = 20 !for testing
+	!Detonation velocity bounds for do_sweep:
+	!The formula used is (sweep_min_mach + sweep_max_mach*(i-1)/(sweep_znd_iters-1))*cs0
+	!for i in the range 1..sweep_znd_iters
+	!sweep_min_mach = 4.0	!normal
+	sweep_min_mach = 2.0
+	sweep_max_mach = 8.0
+
+	!Controls for if we're doing a search for H (set do_h_search true)
+	h_search_vdet = 1.28d9		!cm/s
+	h_search_bracket_low = 5d4	!cm
+	h_search_bracket_high = 1d12	!cm
+	h_search_numsteps = 100		
+	h_search_tol = 1d-4
+	h_search_xmax = 1d10		!cm
+
+	!Controls for if we're doing a search for v_det (set do_vdet_search true)
+	vdet_search_h_scale = 2d7 			!cm
+	vdet_search_bracket_low = 0.5d9		!cm/s
+	vdet_search_bracket_high = 1.8d9	!cm/s
+	vdet_search_numsteps = 100		
+	vdet_search_tol = 1d-5				!For jumping the pathological point
+	!vdet_search_tol = 1d-3				!When using this as a CJ solver
+	vdet_search_xmax = 1d10				!cm
+
+	!Controls for sweeping through WD M_env values:
+	!Fraction of pressure scale height above the envelope base where the leading point
+	!of the detonation lies (usually 0.5 in FLASH simulations) - determines rho0(rho_b)
+	shock_lead_hp_frac = 0.5
+	!m_env_min = 1d-3	!(msun)
+	m_env_min = 1d-2	!(msun)
+	m_env_max = 2d-1	!(msun)
+	env_rho_min = 1d4		!lower limit on rho0 in our WD envelope
+	env_rho_max = 4d6		!upper limit on rho0 in our WD envelope
+	!true: use Lane-Emden equation and polytropes to determine rho_b and P_b in shell
+	!false: use thin-shell calculation to determine rho_b and P_b in shell
+	wd_env_use_le = .false.
+	n_le = 1.5		!Polytrope index, P = k_le*rho**(1+1/n_le)
+	!true: use MESA EOS and stellar structure equations to determine rho_b and P_b in shell
+	!false: use thin-shell calculation to determine rho_b and P_b in shell
+	wd_env_use_mesa = .true.
+
+	!Controls for traversing the pathological point:
+	sonic_limit_pathological = 0.99		!Mach number to stop integration and start linearization
+	pathological_linearization_ratio = 0.5	!Linearize over this ratio*x
+	!Adjust pathological_linearization_ratio to get better estimates:
+	use_variable_linearization_ratio = .true.
+
+	!Controls for the numerics:
+
+	!Integration time:
+	!burn_time = 2d0		!sec (or cm for znd since we're doing a spatial integration)	
+	burn_time = 1d10		!sec (or cm for znd since we're doing a spatial integration)
+
+	!When to cut off integration (and say we hit the sonic point)
+	!sonic_limit = 0.99999		!mach number
+	sonic_limit = 0.99999
+
+	num_steps = 2000 	!For typical production runs - these are data output points, not integration steps
+	!num_steps = 10		!For Jacobian diagnostics
+	ijac = 1			!0:numeric, 1:analytic (Jacobian for ZND integrator)
+	which_solver = 4 	!ros3pl_solver
+	!which_solver = 1 	!ros2_solver
+	max_steps = 1000	!Max number of internal integration steps per isolve() call
+	rtol_init = 1d-6	!Relative tolerance for accepting integration step
+	atol_init = 1d-6	!Absolute tolerance for accepting integration step
+/

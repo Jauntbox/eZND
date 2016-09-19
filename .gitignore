@@ -1,0 +1,13 @@
+#Compiled object files
+*.o
+*.mod
+
+#Output files
+*.data
+
+#Executables
+run_profiler
+run_new
+run_le
+run_wd
+test

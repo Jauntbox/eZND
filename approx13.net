@@ -1,0 +1,149 @@
+      ! the approx13 is a close approximation to Frank's APPROX13
+      ! have to include 1H otherwise crash, but no reactions link to it
+
+      add_isos(
+         h1
+         he4
+         c12
+         o16
+         ne20
+         mg24
+         si28
+         s32
+         ar36
+         ca40
+         ti44
+         cr48
+         fe52
+         ni56
+         )
+         
+      add_reactions( 
+         ! helium burning
+         
+         r_he4_he4_he4_to_c12
+         r_c12_to_he4_he4_he4
+
+         r_c12_ag_o16
+         r_o16_ga_c12
+
+         r_o16_ag_ne20
+         r_ne20_ga_o16
+
+         r_ne20_ag_mg24
+         r_mg24_ga_ne20
+        
+
+         ! mg24 => si28           
+         r_mg24_ag_si28
+         rmg24ap_to_si28,      ! mg24(a,p)al27(p,g)si28 
+         rmg24ap_aux,          ! mg24(a,p)al27
+         ral27pg_aux,          !          al27(p,g)si28
+         
+         ! si28 => mg24           
+         rsi28gp_to_mg24,      ! si28(g,p)al27(p,a)mg24
+         rsi28gp_aux,          ! si28(g,p)al27
+         ral27pa_aux,          !          al27(p,a)mg24
+         r_si28_ga_mg24
+         
+         ! si28 => s32            
+         r_si28_ag_s32
+         rsi28ap_to_s32,       ! si28(a,p)p31(p,g)s32
+         rsi28ap_aux,          ! si28(a,p)p31
+         rp31pg_aux,           !          p31(p,g)s32
+         
+         ! s32 => si28
+         rs32gp_to_si28,       ! s32(g,p)p31(p,a)si28
+         rs32gp_aux,           ! s32(g,p)p31
+         rp31pa_aux,           !         p31(p,a)si28
+         r_s32_ga_si28
+         
+         ! s32 => ar36
+         r_s32_ag_ar36                 
+         rs32ap_to_ar36,    ! s32(a,p)cl35(p,g)ar36        
+         rs32ap_aux,        ! s32(a,p)cl35
+         rcl35pg_aux,       !         cl35(p,g)ar36
+
+         ! ar36 => s32
+         rar36gp_to_s32,    ! ar36(g,p)cl35(p,a)s32
+         rar36gp_aux,       ! ar36(g,p)cl35
+         rcl35pa_aux,       !          cl35(p,a)s32
+         r_ar36_ga_s32
+         
+         ! ar36 => ca40
+         r_ar36_ag_ca40
+         rar36ap_to_ca40,   ! ar36(a,p)k39(p,g)ca40
+         rar36ap_aux,       ! ar36(a,p)k39
+         rk39pg_aux,        !          k39(p,g)ca40
+              
+         ! ca40 => ar36
+         rca40gp_to_ar36,   ! ca40(g,p)k39(p,a)ar36
+         rca40gp_aux,       ! ca40(g,p)k39
+         rk39pa_aux,        !          k39(p,a)ar36
+         r_ca40_ga_ar36
+            
+         ! ca40 => ti44
+         r_ca40_ag_ti44
+         rca40ap_to_ti44,   ! ca40(a,p)sc43(p,g)ti44 
+         rca40ap_aux,       ! ca40(a,p)sc43
+         rsc43pg_aux,       !          sc43(p,g)ti44
+ 
+         ! ti44 => ca40
+         rti44gp_to_ca40,   ! ti44(g,p)sc43(p,a)ca40     
+         rti44gp_aux,       ! ti44(g,p)sc43
+         rsc43pa_aux,       !          sc43(p,a)ca40
+         r_ti44_ga_ca40
+      
+         ! ti44 => cr48
+         r_ti44_ag_cr48
+         rti44ap_to_cr48,   ! ti44(a,p)v47(p,g)cr48
+         rti44ap_aux,       ! ti44(a,p)v47
+         rv47pg_aux,        !          v47(p,g)cr48
+         
+         ! cr48 => ti44
+         rcr48gp_to_ti44,   ! cr48(g,p)v47(p,a)ti44
+         rcr48gp_aux,       ! cr48(g,p)v47
+         rv47pa_aux,        !          v47(p,a)ti44
+         r_cr48_ga_ti44
+         
+         ! cr48 => fe52
+         r_cr48_ag_fe52
+         rcr48ap_to_fe52,   ! cr48(a,p)mn51(p,g)fe52
+         rcr48ap_aux,       ! cr48(a,p)mn51
+         rmn51pg_aux,       !          mn51(p,g)fe52
+            
+         ! fe52 => cr48
+         rfe52gp_to_cr48,   ! fe52(g,p)mn51(p,a)cr48
+         rfe52gp_aux,       ! fe52(g,p)mn51
+         rmn51pa_aux,       !          mn51(p,a)cr48
+         r_fe52_ga_cr48
+
+         ! fe52 => ni56
+         r_fe52_ag_ni56
+         rfe52ap_to_ni56,   ! fe52(a,p)co55(p,g)ni56
+         rfe52ap_aux,       ! fe52(a,p)co55
+         rco55pg_aux,       !          co55(p,g)ni56
+
+         ! ni56 => fe52
+         rni56gp_to_fe52,   ! ni56(g,p)co55(p,a)fe52
+         rni56gp_aux,       ! ni56(g,p)co55
+         rco55pa_aux,       !          co55(p,a)fe52
+         r_ni56_ga_fe52
+
+         r1212,                ! c12 + c12 -> ne20 + he4, includes na23+p channel
+
+         r1216_to_mg24,        ! c12 + o16 -> mg24 + he4          
+         r1216_to_si28,        ! c12 + o16 -> si28         
+        
+         r1616a,               ! o16(o16,a)si28         
+         r1616p_aux,           ! o16(o16,p)p31         
+         r1616ppa,             ! o16(o16,p)p31(p,a)si28         
+         r1616ppg,             ! o16(o16,p)p31(p,g)s32         
+         r1616g               ! o16(o16,g)s32         
+
+
+         )     
+  
+
+     
+     
