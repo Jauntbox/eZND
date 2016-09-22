@@ -5046,6 +5046,7 @@ module znd
 				output_profile = .false.
 				find_lburn = .false.
 				do_pathological = .false.
+				write(*,*) 'integrating with vdet =', v_det
 				call znd_integrate(t_start, t_end, num_steps, output_profile, profile_io, find_lburn)
 
         		write(*,'(a15,ES25.9)') 'u_x (cm/s)', vars(species+3)
