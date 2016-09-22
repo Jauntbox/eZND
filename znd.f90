@@ -4782,10 +4782,10 @@ module znd
 				'P (dyne/cm^2)', 'Etot (erg/g)', 'gamma1', 'u/c_s', 'q (erg/g)', &
 				 'mass flux', 'mom. flux', 'energy flux'
 			 else
-				write(profile_io,'(999a30)') 'Step', 'Position (cm)', &
-				chem_isos% name(chem_id(1:species)), 'rho (g/cm^3)', 'T (K)', 'u (cm/s)',&
-				'P (dyne/cm^2)', 'Etot (erg/g)', 'gamma1', 'u/c_s', 'q (erg/g)', &
-				 'mass flux', 'mom. flux', 'energy flux', &
+				write(profile_io,'(999a30)') 'Step', 'Position_cm', &
+				chem_isos% name(chem_id(1:species)), 'rho_g_p_cm_3', 'T_K', 'u_cm_p_s',&
+				'P_dyne_p_cm_2', 'Etot_erg_p_g', 'gamma1', 'u_over_c_s', 'q_erg_p_g', &
+				 'mass_flux', 'mom._flux', 'energy_flux', &
 				 'f1_blowout', 'f2_blowout', 'f3_blowout', &
 				 'f1_curvature', 'f2_curvature', 'f3_curvature'
 			 endif
