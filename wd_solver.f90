@@ -138,7 +138,8 @@ module wd_solver
 		
 			!mesa_dir = '/Users/Kevin/mesa'
 			!mesa_dir = '/Users/Kevin/mesa_5271'
-			mesa_dir = '/Users/Kevin/mesa_5819'
+			!mesa_dir = '/Users/Kevin/mesa_5819'
+			mesa_dir = ''
 			call const_init(mesa_dir, ierr_wd)
 
 			!EOS options:

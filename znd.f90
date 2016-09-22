@@ -4080,6 +4080,9 @@ module znd
          allocate(orig_vars(num_vars), orig_derivs(num_vars))
          orig_vars = 0d0
          orig_derivs = 0d0
+      else
+         orig_vars => null()
+         orig_derivs => null()
       endif
     
       iwork_isolve = 0
