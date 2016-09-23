@@ -160,7 +160,7 @@ module wd_solver
 				dzbar_dx(species_wd), dmc_dx(species_wd), stat=ierr_wd)
 				if (ierr_wd /= 0) stop 'allocate failed'
 
-			call eos_init(eos_file_prefix, '', '', use_cache, info)
+			call eos_init(eos_file_prefix, '', '', '', use_cache, info)
 			if (info /= 0) then
 				write(*,*) 'eos_init failed in Setup_eos'
 				stop 1
@@ -236,9 +236,8 @@ module wd_solver
 			end do
 			write(*,*)
 
-			call composition_info(species_wd, chem_id, xa_wd, xh, xhe, abar, zbar, z2bar, &
+			call composition_info(species_wd, chem_id, xa_wd, xh, xhe, zm, abar, zbar, z2bar, &
 				ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-			zm = 1d0 - xh - xhe
 			!write(*,*) abar, zbar, zm
 
 			lout_wd = 6
@@ -278,9 +277,8 @@ module wd_solver
 			y_wd(3) = 0d0							!t_sound in s
 			y_wd(4) = x_wd							!r(0), if using P as indep variable
 			
-			call composition_info(species_wd, chem_id, xa_wd, xh, xhe, abar, zbar, z2bar, &
+			call composition_info(species_wd, chem_id, xa_wd, xh, xhe, zm, abar, zbar, z2bar, &
 				ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-			zm = 1d0 - xh - xhe
 			!write(*,*) abar, zbar, zm
 
 			rho = y_wd(1)
@@ -300,11 +298,11 @@ module wd_solver
 			!work_wd = 0
 		end subroutine set_initial_conditions
       
-		subroutine wd_derivs(n,x,y,f,lrpar,rpar,lipar,ipar,ierr)
+		subroutine wd_derivs(n,x,h,y,f,lrpar,rpar,lipar,ipar,ierr)
 			integer, intent(in) :: n, lrpar, lipar
-			real(dp), intent(in) :: x
-			real(dp), intent(inout) :: y(n)
-			real(dp), intent(out) :: f(n)
+			real(dp), intent(in) :: x, h
+			real(dp), intent(inout) :: y(:)
+			real(dp), intent(out) :: f(:)
 			integer, intent(inout), pointer :: ipar(:) ! (lipar)
 			real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
 			integer, intent(out) :: ierr ! nonzero means retry with smaller timestep.
@@ -353,13 +351,13 @@ module wd_solver
 
 		end subroutine wd_derivs
 		
-		subroutine envelope_derivs(n,x,y,f,lrpar,rpar,lipar,ipar,ierr)
+		subroutine envelope_derivs(n,x,h,y,f,lrpar,rpar,lipar,ipar,ierr)
 			implicit none
 		
 			integer, intent(in) :: n, lrpar, lipar
-			real(dp), intent(in) :: x
-			real(dp), intent(inout) :: y(n)
-			real(dp), intent(out) :: f(n)
+			real(dp), intent(in) :: x, h
+			real(dp), intent(inout) :: y(:)
+			real(dp), intent(out) :: f(:)
 			integer, intent(inout), pointer :: ipar(:) ! (lipar)
 			real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
 			integer, intent(out) :: ierr ! nonzero means retry with smaller timestep.
@@ -569,9 +567,8 @@ module wd_solver
 			end do
 			
 			!Find base density in envelope (rho_b):
-			call composition_info(species_wd, chem_id, xa_env, xh, xhe, abar, zbar, z2bar, &
+			call composition_info(species_wd, chem_id, xa_env, xh, xhe, zm, abar, zbar, z2bar, &
 				ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-			zm = 1d0 - xh - xhe
 			logPgas = log10(Pgas)
 			T = t_env	!Envelope temperature higher than T_c typically
 			logT = log10(T)
