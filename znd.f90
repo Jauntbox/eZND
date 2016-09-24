@@ -406,7 +406,7 @@ module znd
       
       		! set defaults:
       		!-----------------------------------------------------------------------------
-      		my_mesa_dir = '/Users/Kevin/mesa'
+      		my_mesa_dir = ''
       		!data_dir = '/Users/Kevin/mesa/data'	!MESA data location
     		net_file = 'basic.net'				!Which nuclear net to use
     		output_profile_name='./diagnosis_runs/rho0_1d5_t0_1d8-he4_to_c12.data'
