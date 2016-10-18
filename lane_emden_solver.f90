@@ -65,11 +65,11 @@ module lane_emden_solver
          ! the derivatives do not depend on x         
       end subroutine van_der_Pol_derivs
       
-      subroutine lane_emden_derivs(n,x,y,f,lrpar,rpar,lipar,ipar,ierr)
+      subroutine lane_emden_derivs(n,x,h,y,f,lrpar,rpar,lipar,ipar,ierr)
          integer, intent(in) :: n, lrpar, lipar
-         real(dp), intent(in) :: x
-         real(dp), intent(inout) :: y(n)
-         real(dp), intent(out) :: f(n)
+         real(dp), intent(in) :: x, h
+         real(dp), intent(inout) :: y(:)
+         real(dp), intent(out) :: f(:)
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr ! nonzero means retry with smaller timestep.

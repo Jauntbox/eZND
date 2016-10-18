@@ -4,7 +4,7 @@
 # define MESA_DIR to be the path to the mesa directory
 
 #MESA_DIR = /Users/Kevin/mesa_5271
-MESA_DIR = /Users/Kevin/mesa_5819
+#MESA_DIR = /Users/Kevin/mesa_5819
 
 include $(MESA_DIR)/utils/makefile_header
 

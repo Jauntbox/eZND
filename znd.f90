@@ -110,6 +110,7 @@ module znd
       ! absolute and relative error tolerances
       double precision, pointer :: rtol(:), atol(:) 
       integer :: itol
+      double precision :: y_min, y_max
 
       ! information about the jacobian matrix
       integer :: ijac, nzmax, isparse, mljac, mujac
@@ -123,6 +124,10 @@ module znd
       integer :: lrd, lid
       double precision, pointer :: rpar_decsol(:) ! (lrd)
       integer, pointer :: ipar_decsol(:) ! (lid)
+
+      integer :: caller_id_blk, nvar_blk, nz_blk
+      real(dp), dimension(:), pointer :: lblk, dblk, ublk ! =(nvar,nvar,nz)
+      real(dp), dimension(:), pointer :: uf_lblk, uf_dblk, uf_ublk ! =(nvar,nvar,nz)
       
       ! work arrays.
       integer :: lwork_isolve, liwork_isolve
@@ -312,24 +317,21 @@ module znd
     !(pointers here will be allocated in the do1_net_burn subroutine)
     integer :: screening_mode
 	integer :: caller_id
-	logical :: reuse_given_rates, clip
+	logical :: reuse_given_rates
 	double precision, pointer, dimension(:) :: xa !(species)
 	double precision, pointer, dimension(:) :: Y_mass !(species)
 	double precision ::  eta, d_eta_dlnT, d_eta_dlnRho
 	double precision ::  t_start, t_end
 	double precision, pointer, dimension(:) ::  d_eps_nuc_dx !(species)
 	double precision, pointer, dimension(:) ::  rate_factors !(num_reactions)
-	double precision, pointer, dimension(:) ::  category_factors !(num_categories)
-	double precision, pointer, dimension(:,:) ::  rate_screened !(num_rvs, num_reactions)
-	double precision, pointer, dimension(:,:) ::  reaction_eps_nuc !(num_rvs, num_reactions)
-	double precision, pointer , dimension(:,:)::  rate_raw !(num_rvs, num_reactions)
+        double precision :: weak_rate_factor
 	double precision ::  xh, xhe
 	double precision ::  abar, zbar, z2bar, ye
 	double precision ::  xsum
 	double precision ::  mass_correction
 	double precision ::  eps_nuc, d_eps_nuc_dRho, d_eps_nuc_dT
 	double precision ::  theta_e_for_graboske_et_al
-	double precision, pointer, dimension(:,:) ::  eps_nuc_categories !(num_rvs, num_categories)
+	double precision, pointer, dimension(:) ::  eps_nuc_categories !(num_categories)
 	double precision ::  eps_neu_total
 	double precision, pointer, dimension(:) ::  dxdt !(species)
 	double precision, pointer, dimension(:) ::  d_dxdt_dRho !(species)
@@ -404,7 +406,7 @@ module znd
       
       		! set defaults:
       		!-----------------------------------------------------------------------------
-      		my_mesa_dir = '/Users/Kevin/mesa'
+      		my_mesa_dir = ''
       		!data_dir = '/Users/Kevin/mesa/data'	!MESA data location
     		net_file = 'basic.net'				!Which nuclear net to use
     		output_profile_name='./diagnosis_runs/rho0_1d5_t0_1d8-he4_to_c12.data'
@@ -553,7 +555,7 @@ module znd
 			   return
 			end if
 			
-			call eos_init(eos_file_prefix, '', '', use_cache, info)
+			call eos_init(eos_file_prefix, '', '', '', use_cache, info)
 			if (info /= 0) then
 				write(*,*) 'eos_init failed in Setup_eos'
 				stop 1
@@ -582,7 +584,7 @@ module znd
 			!end if
 			!write(*,*) '3'
 			
-			 call rates_init('reactions.list', '', ierr)
+			 call rates_init('reactions.list', '', .false., '', '', '', ierr)
 			if (ierr /= 0) then
 			   write(*,*) 'rates_init failed'
 			   return
@@ -642,7 +644,7 @@ module znd
          end if
          
          !Turn off the high-T limits on reaction rates to make aprox13 work:
-         call net_turn_off_T_limits(handle, ierr)
+         !call net_turn_off_T_limits(handle, ierr)
    	
       	 allocate(which_rates(rates_reaction_id_max))
          which_rates(:) = which_rates_choice
@@ -1166,9 +1168,8 @@ module znd
 			
 			!Now that the CJ conditions are found, we can also get the Neumann conditions
 			!to start the integration at:
-			call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+			call composition_info(species, chem_id, xa, xh, xhe, zm, abar, zbar, z2bar, &
             	ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-        	zm = 1d0 - xh - xhe
 			logRho = log10(rho0)
          	logT = log10(T0)
          	call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, xa, &
@@ -1388,9 +1389,8 @@ module znd
         !First evaluate the EOS at the initial (rho0, t0) point to get p0:
         logrho = log10(rho0)
         logt = log10(t0)
-        call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+        call composition_info(species, chem_id, xa, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-        zm = 1d0 - xh - xhe
         call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, xa, &
         	rho0, logRho, T0, logT, res, d_dlnRho_const_T, d_dlnT_const_Rho, &
         	d_dabar_const_TRho, d_dzbar_const_TRho, ierr)
@@ -1402,9 +1402,8 @@ module znd
         t = xt*t0
         logrho = log10(rho)
         logt = log10(t)
-        call composition_info(species, chem_id, xa_end, xh, xhe, abar, zbar, z2bar, &
+        call composition_info(species, chem_id, xa_end, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-         zm = 1d0 - xh - xhe
          call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, xa_end, &
         	rho, logRho, T, logT, res, d_dlnRho_const_T, d_dlnT_const_Rho, &
         	d_dabar_const_TRho, d_dzbar_const_TRho, ierr)
@@ -1419,8 +1418,8 @@ module znd
 		chi_t = res(i_chiT)
 		dp_dt = p1/T*chi_T
 		
-		call eos_get_helm_results(eos_handle, Zm, Xh, abar, zbar, Rho, logRho, &
-    			T, logT, res_helm, ierr)
+		call eos_get_helm_results( Xh, abar, zbar, Rho, logRho, &
+    			T, logT, .true., .false., .false., res_helm, ierr)
     	d2e_drho2 = res_helm(h_dedd)
     	d2e_drhoT = res_helm(h_dedt)
     	d2e_dt2 = res_helm(h_dett)
@@ -1773,9 +1772,8 @@ module znd
 		V0 = 1d0/rho0
         logrho = log10(rho0)
         logt = log10(t0)
-        call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+        call composition_info(species, chem_id, xa, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-        zm = 1d0 - xh - xhe
         call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, xa, &
         	rho0, logRho, T0, logT, res, d_dlnRho_const_T, d_dlnT_const_Rho, &
         	d_dabar_const_TRho, d_dzbar_const_TRho, ierr)
@@ -1788,9 +1786,8 @@ module znd
         t = xt*t0
         logrho = log10(rho)
         logt = log10(t)
-        call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+        call composition_info(species, chem_id, xa, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-         zm = 1d0 - xh - xhe
          call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, xa, &
         	rho, logRho, T, logT, res, d_dlnRho_const_T, d_dlnT_const_Rho, &
         	d_dabar_const_TRho, d_dzbar_const_TRho, ierr)
@@ -2026,9 +2023,8 @@ module znd
 		!First evaluate the EOS at the initial (rho0, t0) point to get p0:
         logrho = log10(rho0)
         logt = log10(t0)
-        call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+        call composition_info(species, chem_id, xa, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-        zm = 1d0 - xh - xhe
         call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, xa, &
         	rho0, logRho, T0, logT, res, d_dlnRho_const_T, d_dlnT_const_Rho, &
         	d_dabar_const_TRho, d_dzbar_const_TRho, ierr)
@@ -2041,9 +2037,8 @@ module znd
         t = xt*t0
         logrho = log10(rho)
         logt = log10(t)
-        call composition_info(species, chem_id, xa_hug, xh, xhe, abar, zbar, z2bar, &
+        call composition_info(species, chem_id, xa_hug, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-         zm = 1d0 - xh - xhe
          call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, xa_hug, &
         	rho, logRho, T, logT, res, d_dlnRho_const_T, d_dlnT_const_Rho, &
         	d_dabar_const_TRho, d_dzbar_const_TRho, ierr)
@@ -2151,13 +2146,13 @@ module znd
       !Begin burn support routines (jacobian, derivs, etc.)
       !-----------------------------------------------------------------------------------
       
-      subroutine znd_derivs(n, t, x, f, lrpar, rpar, lipar, ipar, ierr)
+      subroutine znd_derivs(n, t, h, x, f, lrpar, rpar, lipar, ipar, ierr)
       	implicit none
       	
          integer, intent(in) :: n, lrpar, lipar
-         real(dp), intent(in) :: t
-         real(dp), intent(inout) :: x(n)
-         real(dp), intent(out) :: f(n) ! dxdt
+         real(dp), intent(in) :: t, h
+         real(dp), intent(inout) :: x(:)
+         real(dp), intent(out) :: f(:) ! dxdt
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr
@@ -2166,19 +2161,19 @@ module znd
          ierr = 0
          
          !write(*,*) 'entering znd_derivs'
-         call znd_jacob(n, t, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
+         call znd_jacob(n, t, h, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
          !write(*,*) 'leaving znd_derivs'
       end subroutine znd_derivs
 
 
-      subroutine znd_jacob(n, time, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
+      subroutine znd_jacob(n, time, ht, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
       
       	implicit none
          
          integer, intent(in) :: n, ld_dfdx, lrpar, lipar
-         real(dp), intent(in) :: time
-         real(dp), intent(inout) :: x(n)
-         real(dp), intent(out) :: f(n), dfdx(ld_dfdx, n)
+         real(dp), intent(in) :: time, ht
+         real(dp), intent(inout) :: x(:)
+         real(dp), intent(out) :: f(:), dfdx(:,:)
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr
@@ -2186,6 +2181,9 @@ module znd
          double precision :: composition(species)
          double precision :: rho, t, u, ux, uy, H, logT, logRho, P, energy, ye, abar, zbar
          double precision :: bind_final, w_final, q_bind, gamma1, cs
+         logical :: just_dxdt
+         type (Net_Info), target :: netinfo_target
+         type (Net_Info), pointer :: netinfo
          !First derivatives that we'll need:
          double precision :: dp_drho, de_drho, dp_dT, de_dT, dp_da, de_da, &
          	dp_dz, de_dz, dP_de_rho
@@ -2217,6 +2215,8 @@ module znd
          include 'formats.dek'
          
          !write(*,*) 'entering znd_jacob'
+
+         netinfo => netinfo_target
          
          ierr = 0
          f = 0d0
@@ -2261,9 +2261,8 @@ module znd
          !write(*,*) 'uy:',uy
          !read(*,*) testchar
          
-         call composition_info(species, chem_id, composition, xh, xhe, abar, zbar, z2bar, &
+         call composition_info(species, chem_id, composition, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-         zm = 1d0 - xh - xhe
          sum_y = sum(composition/chem_isos% W(chem_id(1:species)))
          sum_yz = sum(composition*chem_isos% Z(chem_id(1:species))/&
          	chem_isos% W(chem_id(1:species)))
@@ -2280,8 +2279,8 @@ module znd
         energy = exp(res(i_lnE)) 							!Internal erg/g of gas
         gamma1 = res(i_gamma1)
         
-        call eos_get_helm_results(eos_handle, Zm, Xh, abar, zbar, &
-        	Rho, logRho, T, logT, res_helm, ierr)
+        call eos_get_helm_results(Xh, abar, zbar, &
+        	Rho, logRho, T, logT, .true., .false., .false., res_helm, ierr)
      	if (ierr /= 0) then
             write(*,*) 'failed in eos_get_helm_results', ierr
         endif
@@ -2386,17 +2385,17 @@ module znd
         	!energy_flux = (energy - q_bind + P/rho + ux**2/2)
 		endif
 		
+        just_dxdt = .false.
      	call net_get( &
-            handle, species, num_reactions, &
+            handle, just_dxdt, netinfo, species, num_reactions, &
             composition, T, logT, Rho, logRho, & 
             abar, zbar, z2bar, ye, eta, d_eta_dlnT, d_eta_dlnRho, &
-            rate_factors, category_factors, & 
-            std_reaction_Qs, std_reaction_neuQs, &
+            rate_factors, weak_rate_factor, & 
+            std_reaction_Qs, std_reaction_neuQs, .false., .false., &
             eps_nuc, d_eps_nuc_dRho, d_eps_nuc_dT, d_eps_nuc_dx, & 
             dxdt, d_dxdt_dRho, d_dxdt_dT, d_dxdt_dx, & 
             screening_mode, theta_e_for_graboske_et_al, &     
-            rate_screened, rate_raw, & 
-            reaction_eps_nuc, eps_nuc_categories, eps_neu_total, & 
+            eps_nuc_categories, eps_neu_total, & 
             lwork_net, work_net, ierr)
         if (ierr /= 0) then
             write(*,*) 'failed in net_get', ierr
@@ -3499,7 +3498,7 @@ module znd
          use const_def, only: dp
          integer, intent(in) :: nr, n, lrpar, lipar
          real(dp), intent(in) :: xold, x
-         real(dp), intent(inout) :: y(n)
+         real(dp), intent(inout) :: y(:)
          ! y can be modified if necessary to keep it in valid range of possible solutions.
          real(dp), intent(inout), target :: rwork_y(*)
          integer, intent(inout), target :: iwork_y(*)
@@ -3517,11 +3516,11 @@ module znd
       
       !----------End ZND subroutines
       
-      subroutine constp_derivs(n, t, x, f, lrpar, rpar, lipar, ipar, ierr)
+      subroutine constp_derivs(n, t, h, x, f, lrpar, rpar, lipar, ipar, ierr)
          integer, intent(in) :: n, lrpar, lipar
-         real(dp), intent(in) :: t
-         real(dp), intent(inout) :: x(n)
-         real(dp), intent(out) :: f(n) ! dxdt
+         real(dp), intent(in) :: t, h
+         real(dp), intent(inout) :: x(:)
+         real(dp), intent(out) :: f(:) ! dxdt
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr
@@ -3530,19 +3529,19 @@ module znd
          ierr = 0
          
          !write(*,*) 'entering constp_derivs'
-         call constp_jacob(n, t, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
+         call constp_jacob(n, t, h, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
          !write(*,*) 'leaving constp_derivs'
       end subroutine constp_derivs
 
 
-      subroutine constp_jacob(n, time, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
+      subroutine constp_jacob(n, time, h, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
       
       	implicit none
          
          integer, intent(in) :: n, ld_dfdx, lrpar, lipar
-         real(dp), intent(in) :: time
-         real(dp), intent(inout) :: x(n)
-         real(dp), intent(out) :: f(n), dfdx(ld_dfdx, n)
+         real(dp), intent(in) :: time, h
+         real(dp), intent(inout) :: x(:)
+         real(dp), intent(out) :: f(:), dfdx(:,:)
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr
@@ -3550,8 +3549,14 @@ module znd
          double precision :: composition(species)
          double precision :: rho, cp
          integer :: i
+
+         logical :: just_dxdt
+         type (Net_Info), target :: netinfo_target
+         type (Net_Info), pointer :: netinfo
          
          include 'formats.dek'
+
+         netinfo => netinfo_target
          
          !write(*,*) 'entering constp_jacob'
          
@@ -3569,9 +3574,8 @@ module znd
          
          !write(*,*) composition(1)
          
-         call composition_info(species, chem_id, composition, xh, xhe, abar, zbar, z2bar, &
+         call composition_info(species, chem_id, composition, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-         zm = 1d0 - xh - xhe
          
          rho = x(species+1) !local variable
             
@@ -3586,25 +3590,25 @@ module znd
         endif
         cp = res(i_Cp)
         
-        call eos_get_helm_results(eos_handle, Zm, Xh, abar, zbar, &
-        	Rho, logRho, burn_T, logT, res_helm, ierr)
+        call eos_get_helm_results(Xh, abar, zbar, &
+        	Rho, logRho, burn_T, logT, .true., .false., .false., res_helm, ierr)
      	if (ierr /= 0) then
             write(*,*) 'failed in eosPT_get', ierr
         endif
 
 		!write(*,*) x(1), sum(composition)
 		
+        just_dxdt = .false.
      	call net_get( &
-            handle, species, num_reactions, &
+            handle, just_dxdt, netinfo, species, num_reactions, &
             composition, burn_T, logT, burn_Rho, logRho, & 
             abar, zbar, z2bar, ye, eta, d_eta_dlnT, d_eta_dlnRho, &
-            rate_factors, category_factors, & 
-            std_reaction_Qs, std_reaction_neuQs, &
+            rate_factors, weak_rate_factor, & 
+            std_reaction_Qs, std_reaction_neuQs, .false., .false., &
             eps_nuc, d_eps_nuc_dRho, d_eps_nuc_dT, d_eps_nuc_dx, & 
             dxdt, d_dxdt_dRho, d_dxdt_dT, d_dxdt_dx, & 
             screening_mode, theta_e_for_graboske_et_al, &     
-            rate_screened, rate_raw, & 
-            reaction_eps_nuc, eps_nuc_categories, eps_neu_total, & 
+            eps_nuc_categories, eps_neu_total, & 
             lwork_net, work_net, ierr)
         if (ierr /= 0) then
             write(*,*) 'failed in net_get', ierr
@@ -3675,11 +3679,11 @@ module znd
       !------
       
       
-      subroutine burn_derivs(n, t, x, f, lrpar, rpar, lipar, ipar, ierr)
+      subroutine burn_derivs(n, t, h, x, f, lrpar, rpar, lipar, ipar, ierr)
          integer, intent(in) :: n, lrpar, lipar
-         real(dp), intent(in) :: t
-         real(dp), intent(inout) :: x(n)
-         real(dp), intent(out) :: f(n) ! dxdt
+         real(dp), intent(in) :: t, h
+         real(dp), intent(inout) :: x(:)
+         real(dp), intent(out) :: f(:) ! dxdt
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr
@@ -3688,27 +3692,33 @@ module znd
          ierr = 0
          
          !write(*,*) 'entering burn_derivs'
-         call burn_jacob(n, t, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
+         call burn_jacob(n, t, h, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
          !write(*,*) 'leaving burn_derivs'
       end subroutine burn_derivs
 
 
-      subroutine burn_jacob(n, time, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
+      subroutine burn_jacob(n, time, h, x, f, dfdx, ld_dfdx, lrpar, rpar, lipar, ipar, ierr)
       
       	implicit none
          
          integer, intent(in) :: n, ld_dfdx, lrpar, lipar
-         real(dp), intent(in) :: time
-         real(dp), intent(inout) :: x(n)
-         real(dp), intent(out) :: f(n), dfdx(ld_dfdx, n)
+         real(dp), intent(in) :: time, h
+         real(dp), intent(inout) :: x(:)
+         real(dp), intent(out) :: f(:), dfdx(:,:)
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr
          
          double precision :: composition(species)
          integer :: i
+
+         logical :: just_dxdt = .false.
+         type (Net_Info), target :: netinfo_target
+         type (Net_Info), pointer :: netinfo
          
          include 'formats.dek'
+
+         netinfo => netinfo_target
          
          !write(*,*) 'entering burn_jacob'
          
@@ -3726,22 +3736,21 @@ module znd
          
          !write(*,*) composition(1)
          
-         call composition_info(species, chem_id, composition, xh, xhe, abar, zbar, z2bar, &
+         call composition_info(species, chem_id, composition, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
 
 		!write(*,*) x(1), sum(composition)
 		
      	call net_get( &
-            handle, species, num_reactions, &
+            handle, just_dxdt, netinfo, species, num_reactions, &
             composition, burn_T, logT, burn_Rho, logRho, & 
             abar, zbar, z2bar, ye, eta, d_eta_dlnT, d_eta_dlnRho, &
-            rate_factors, category_factors, & 
-            std_reaction_Qs, std_reaction_neuQs, &
+            rate_factors, weak_rate_factor, & 
+            std_reaction_Qs, std_reaction_neuQs, .false., .false., &
             eps_nuc, d_eps_nuc_dRho, d_eps_nuc_dT, d_eps_nuc_dx, & 
             dxdt, d_dxdt_dRho, d_dxdt_dT, d_dxdt_dx, & 
             screening_mode, theta_e_for_graboske_et_al, &     
-            rate_screened, rate_raw, & 
-            reaction_eps_nuc, eps_nuc_categories, eps_neu_total, & 
+            eps_nuc_categories, eps_neu_total, & 
             lwork_net, work_net, ierr)
         if (ierr /= 0) then
             write(*,*) 'failed in net_get', ierr
@@ -3811,14 +3820,14 @@ module znd
       end subroutine set_Aptr
 
 
-      subroutine burn_sjac(n,time,y,f,nzmax,ia,ja,values,lrpar,rpar,lipar,ipar,ierr)  
+      subroutine burn_sjac(n,time,h,y,f,nzmax,ia,ja,values,lrpar,rpar,lipar,ipar,ierr)  
          use mtx_lib, only: dense_to_sparse_with_diag
          use mtx_def
          integer, intent(in) :: n, nzmax, lrpar, lipar
-         real(dp), intent(in) :: time
-         real(dp), intent(inout) :: y(n)
-         integer, intent(out) :: ia(n+1), ja(nzmax)
-         real(dp), intent(out) :: f(n), values(nzmax)
+         real(dp), intent(in) :: time, h
+         real(dp), intent(inout) :: y(:)
+         integer, intent(out) :: ia(:), ja(:)
+         real(dp), intent(out) :: f(:), values(:)
          integer, intent(inout), pointer :: ipar(:) ! (lipar)
          real(dp), intent(inout), pointer :: rpar(:) ! (lrpar)
          integer, intent(out) :: ierr ! nonzero means terminate integration
@@ -3833,7 +3842,7 @@ module znd
          ld_dfdv = n
          allocate(dfdv(n,n),stat=ierr)
          if (ierr /= 0) return
-         call burn_jacob(n,time,y,f,dfdv,ld_dfdv,lrpar,rpar,lipar,ipar,ierr)
+         call burn_jacob(n,time,h,y,f,dfdv,ld_dfdv,lrpar,rpar,lipar,ipar,ierr)
          if (ierr /= 0) then
             deallocate(dfdv)
             return
@@ -3885,6 +3894,13 @@ module znd
       
       !End burn support routines (jacobian, derivs, etc.)
       !-----------------------------------------------------------------------------------
+
+      subroutine burn_finish_substep(nstp, time, y, ierr)
+         integer,intent(in) :: nstp
+         double precision, intent(in) :: time, y(:)
+         integer, intent(out) :: ierr
+      end subroutine burn_finish_substep
+
       
            
       subroutine do1_net_eval
@@ -3892,19 +3908,29 @@ module znd
          
          implicit none
         
-         double precision :: time_doing_net
          integer :: iounit, i
+
+         logical :: just_dxdt
+         type (Net_Info), target :: netinfo_target
+         type (Net_Info), pointer :: netinfo
+
+         double precision :: eps, odescale
+         logical :: use_pivoting, trace, burn_dbg
+
+         integer :: burn_lwork, net_lwork
+         real(dp), pointer :: burn_work_array(:), net_work_array(:)
+         real(dp) :: avg_eps_nuc, eps_neu_total
          
          include "formats.dek"
+
+         netinfo=>netinfo_target
          
          ierr = 0
          
          !Allocate the arrays declared in the beginning of the module:
          allocate (xa(species), y_mass(species), dabar_dx(species), dzbar_dx(species), &
          	d_eps_nuc_dx(species), dmc_dx(species), rate_factors(num_reactions), &
-         	category_factors(num_categories), rate_screened(num_rvs, num_reactions), &
-			reaction_eps_nuc(num_rvs, num_reactions), rate_raw(num_rvs, num_reactions), &
-			eps_nuc_categories(num_rvs, num_categories), dxdt(species), &
+			eps_nuc_categories(num_categories), dxdt(species), &
 			d_dxdt_dRho(species), d_dxdt_dT(species), d_dxdt_dx(species,species))
          
          ! set mass fractions -- must add to 1.0
@@ -3941,7 +3967,7 @@ module znd
          !	write(*,*) chem_id(i), net_iso(i), net_iso(chem_id(i))
          !end do
          
-         call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+         call composition_info(species, chem_id, xa, xh, xhe, zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
             
          logT = log10(burn_t)
@@ -3949,23 +3975,24 @@ module znd
          
          eta = 0
          rate_factors(:) = 1
-         category_factors(:) = 1
+         weak_rate_factor = 1
 
          theta_e_for_graboske_et_al =  1 ! for nondegenerate
          screening_mode = extended_screening
          reuse_given_rates = .false.
+
+         just_dxdt = .false.
          
          call net_get( &
-            handle, species, num_reactions, &
+            handle, just_dxdt, netinfo, species, num_reactions, &
             xa, burn_T, logT, burn_Rho, logRho, & 
             abar, zbar, z2bar, ye, eta, d_eta_dlnT, d_eta_dlnRho, &
-            rate_factors, category_factors, & 
-            std_reaction_Qs, std_reaction_neuQs, &
+            rate_factors, weak_rate_factor, & 
+            std_reaction_Qs, std_reaction_neuQs, .false., .false., &
             eps_nuc, d_eps_nuc_dRho, d_eps_nuc_dT, d_eps_nuc_dx, & 
             dxdt, d_dxdt_dRho, d_dxdt_dT, d_dxdt_dx, & 
             screening_mode, theta_e_for_graboske_et_al, &     
-            rate_screened, rate_raw, & 
-            reaction_eps_nuc, eps_nuc_categories, eps_neu_total, & 
+            eps_nuc_categories, eps_neu_total, & 
             lwork_net, work_net, ierr)
          if (ierr /= 0) then
             write(*,*) 'failed in net_get'
@@ -4002,39 +4029,50 @@ module znd
          t_start = 0d0 			!Starting time?
          t_end = burn_time			!Ending time (s)?
          !which_solver = 8 		!seulex - defined in num_def
-         clip = .true. 		 	!true = set negative mass fractions to zero during burn
          times = t_end
          log10Ts_f = logT
          log10Rhos_f = logRho
          etas_f = eta
          dxdt_source_term => null()
-         max_step_size = 0
          !max_steps = 10000
          !rtol(:) = 1d-6
          !atol(:) = 1d-6
          rtol(:) = rtol_init
          atol(:) = atol_init
 		 itol = 0
+         y_min = -1e100
+         y_max = 1e100
          h = 1d-4
          caller_id = 0
          iout = 1
-         time_doing_net = 0
+         eps = rtol_init
+         odescale = 1e-5
+         trace = .false.
+         burn_dbg = .false.
+         use_pivoting = .true.
+
+         burn_lwork = net_1_zone_burn_work_size(handle,ierr)
+         if (ierr /= 0) stop
+         net_lwork = net_work_size(handle,ierr)
+         if (ierr /= 0) stop
+         allocate(net_work_array(net_lwork), burn_work_array(burn_lwork))
          
           ! a 1-zone integrator for nets -- for given temperature and density as functions of time
       	 call net_1_zone_burn(&
-              handle, which_solver, species, num_reactions, t_start, t_end, xa, clip, &
+              handle, species, num_reactions, t_start, t_end, xa, &
               ! for interpolating T, rho, eta wrt time
               num_times, times, log10Ts_f1, log10Rhos_f1, etas_f1, &
               ! other args for net_get
-              dxdt_source_term, rate_factors, category_factors, std_reaction_Qs, std_reaction_neuQs, &
+              dxdt_source_term, rate_factors, weak_rate_factor, std_reaction_Qs, std_reaction_neuQs, &
               screening_mode, theta_e_for_graboske_et_al, &
               ! args to control the solver -- see num/public/num_isolve.dek
-              h, max_step_size, max_steps, rtol, atol, itol, &
-              ! which linear algebra routines -- see num/public/num_isolve.dek
-              lapack, &
+              h, max_steps, eps, odescale, &
+              .false., use_pivoting, trace, burn_dbg, burn_finish_substep, &
+              burn_lwork, burn_work_array, &
+              net_lwork, net_work_array, &
               ! results
-              caller_id, null_solout, iout, ending_x, &
-              nfcn, njac, nstep, naccpt, nrejct, time_doing_net, ierr)
+              ending_x, avg_eps_nuc, eps_neu_total, &
+              nfcn, njac, nstep, naccpt, nrejct, ierr)
          if (ierr /= 0) then
             write(*,*) 'failed in net_1_zone_burn'
             stop 1
@@ -4042,13 +4080,13 @@ module znd
              
         write(*,*) 
         write(*,*) 'burning complete'
-        write(*,'(ES12.4,a4)') time_doing_net,'sec'
         write(*,*)
         do i=1,species
         	write(*,*) chem_isos% name(chem_id(i)), ending_x(i)
         end do
         
         deallocate(ending_x, times, log10Ts_f1, log10Rhos_f1, etas_f1, log10Ps_f1, stat=ierr)  
+        deallocate(net_work_array,burn_work_array)
       end subroutine do1_net_eval
       
       !subroutine lane_emden_init()
@@ -4080,6 +4118,9 @@ module znd
          allocate(orig_vars(num_vars), orig_derivs(num_vars))
          orig_vars = 0d0
          orig_derivs = 0d0
+      else
+         orig_vars => null()
+         orig_derivs => null()
       endif
     
       iwork_isolve = 0
@@ -4128,11 +4169,14 @@ module znd
    		call isolve( &
    			which_solver, num_vars, znd_derivs, t_start, vars, t_end, &
    			h, max_step_size, max_steps, &
-   			rtol, atol, itol, &
+   			rtol, atol, itol, y_min, y_max, &
    			znd_jacob, ijac, null_sjac, nzmax, isparse, mljac, mujac, &
    			null_mas, imas, mlmas, mumas, &
    			znd_solout, iout, &
-   			lapack_decsol, null_decsols, lrd, rpar_decsol, lid, ipar_decsol, &
+   			lapack_decsol, null_decsols, null_decsolblk, &
+                        lrd, rpar_decsol, lid, ipar_decsol, &
+                        caller_id_blk, nvar_blk, nz_blk, lblk, dblk, ublk, uf_lblk, uf_dblk, uf_ublk, &
+                        null_fcn_blk_dble, null_jac_blk_dble, &
    			work_isolve, lwork_isolve, iwork_isolve, liwork_isolve, &
    			lrpar, rpar, lipar, ipar, &
    			lout, idid)
@@ -4217,11 +4261,15 @@ module znd
 						call isolve( &
 							which_solver, num_vars, znd_derivs, t_start, vars, t_end, &
 							h, max_step_size, max_steps, &
-							rtol, atol, itol, &
+							rtol, atol, itol, y_min, y_max, &
 							znd_jacob, ijac, null_sjac, nzmax, isparse, mljac, mujac, &
 							null_mas, imas, mlmas, mumas, &
 							znd_solout, iout, &
-							lapack_decsol, null_decsols, lrd, rpar_decsol, lid, ipar_decsol, &
+							lapack_decsol, null_decsols, null_decsolblk, &
+                                                        lrd, rpar_decsol, lid, ipar_decsol, &
+                                                        caller_id_blk, nvar_blk, nz_blk, &
+                                                        lblk, dblk, ublk, uf_lblk, uf_dblk, uf_ublk, &
+                                                        null_fcn_blk_dble, null_jac_blk_dble, &
 							work_isolve, lwork_isolve, iwork_isolve, liwork_isolve, &
 							lrpar, rpar, lipar, ipar, &
 							lout, idid)
@@ -4304,11 +4352,14 @@ module znd
    				call isolve( &
    					which_solver, num_vars, znd_derivs, t_start, vars, t_end, &
    					h, max_step_size, max_steps, &
-   					rtol, atol, itol, &
+   					rtol, atol, itol, y_min, y_max, &
    					znd_jacob, ijac, null_sjac, nzmax, isparse, mljac, mujac, &
    					null_mas, imas, mlmas, mumas, &
    					znd_solout, iout, &
-   					lapack_decsol, null_decsols, lrd, rpar_decsol, lid, ipar_decsol, &
+   					lapack_decsol, null_decsols, null_decsolblk, &
+                                        lrd, rpar_decsol, lid, ipar_decsol, &
+                                        caller_id_blk, nvar_blk, nz_blk, lblk, dblk, ublk, uf_lblk, uf_dblk, uf_ublk, &
+                                        null_fcn_blk_dble, null_jac_blk_dble, &
    					work_isolve, lwork_isolve, iwork_isolve, liwork_isolve, &
    					lrpar, rpar, lipar, ipar, &
    					lout, idid)
@@ -4393,11 +4444,14 @@ module znd
    			call isolve( &
    				which_solver, num_vars, znd_derivs, t_start, vars, t_end, &
    				h, max_step_size, max_steps, &
-   				rtol, atol, itol, &
+   				rtol, atol, itol, y_min, y_max, &
    				znd_jacob, ijac, null_sjac, nzmax, isparse, mljac, mujac, &
    				null_mas, imas, mlmas, mumas, &
    				znd_solout, iout, &
-   				lapack_decsol, null_decsols, lrd, rpar_decsol, lid, ipar_decsol, &
+   				lapack_decsol, null_decsols, null_decsolblk, &
+                                lrd, rpar_decsol, lid, ipar_decsol, &
+                                caller_id_blk, nvar_blk, nz_blk, lblk, dblk, ublk, uf_lblk, uf_dblk, uf_ublk, &
+                                null_fcn_blk_dble, null_jac_blk_dble, &
    				work_isolve, lwork_isolve, iwork_isolve, liwork_isolve, &
    				lrpar, rpar, lipar, ipar, &
    				lout, idid)
@@ -4460,11 +4514,14 @@ module znd
 				call isolve( &
 					which_solver, num_vars, znd_derivs, t_start, vars, t_end, &
 					h, max_step_size, max_steps, &
-					rtol, atol, itol, &
+					rtol, atol, itol, y_min, y_max, &
 					znd_jacob, ijac, null_sjac, nzmax, isparse, mljac, mujac, &
 					null_mas, imas, mlmas, mumas, &
 					znd_solout, iout, &
-					lapack_decsol, null_decsols, lrd, rpar_decsol, lid, ipar_decsol, &
+					lapack_decsol, null_decsols, null_decsolblk, &
+                                        lrd, rpar_decsol, lid, ipar_decsol, &
+                                        caller_id_blk, nvar_blk, nz_blk, lblk, dblk, ublk, uf_lblk, uf_dblk, uf_ublk, &
+                                        null_fcn_blk_dble, null_jac_blk_dble, &
 					work_isolve, lwork_isolve, iwork_isolve, liwork_isolve, &
 					lrpar, rpar, lipar, ipar, &
 					lout, idid)
@@ -4535,9 +4592,7 @@ module znd
          !Allocate the arrays declared in the beginning of the module:
          allocate (vars(num_vars), xa(species), y_mass(species), dabar_dx(species), dzbar_dx(species), &
          	d_eps_nuc_dx(species), dmc_dx(species), rate_factors(num_reactions), &
-         	category_factors(num_categories), rate_screened(num_rvs, num_reactions), &
-			   reaction_eps_nuc(num_rvs, num_reactions), rate_raw(num_rvs, num_reactions), &
-			   eps_nuc_categories(num_rvs, num_categories), dxdt(species), &
+			   eps_nuc_categories(num_categories), dxdt(species), &
 			   d_dxdt_dRho(species), d_dxdt_dT(species), d_dxdt_dx(species,species))
 		   if (ierr /= 0) then
             write(*, *) 'allocate ierr', ierr
@@ -4573,9 +4628,8 @@ module znd
          
          write(*,*) 'here?'
          
-         call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+         call composition_info(species, chem_id, xa, xh, xhe, Zm, abar, zbar, z2bar, &
             ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-         Zm = 1d0 - xh - xhe
          logRho = log10(rho0)
          logT = log10(t0)
          call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, &
@@ -4653,7 +4707,7 @@ module znd
          
          eta = 0
          rate_factors(:) = 1
-         category_factors(:) = 1
+         weak_rate_factor = 1
          theta_e_for_graboske_et_al =  1 ! for nondegenerate
          screening_mode = extended_screening
          reuse_given_rates = .false.
@@ -4678,6 +4732,8 @@ module znd
          itol = 1			!O: rtol & atol are scalars, 1: they're vectors
          rtol(:) = rtol_init
          atol(:) = atol_init
+         y_min = -1e100
+         y_max = 1e100
          
          !ijac = 1			!0: finite differences, 1: analytic (in inlist now)
          nzmax = 0
@@ -4688,6 +4744,11 @@ module znd
          imas = 0
          mlmas = 0
          mumas = 0        
+
+         caller_id_blk = 0
+         nvar_blk = 0
+         nz_blk = 0
+         nullify( lblk, dblk, ublk, uf_lblk, uf_dblk, uf_ublk )
          
          iout = 1
          
@@ -4779,10 +4840,10 @@ module znd
 				'P (dyne/cm^2)', 'Etot (erg/g)', 'gamma1', 'u/c_s', 'q (erg/g)', &
 				 'mass flux', 'mom. flux', 'energy flux'
 			 else
-				write(profile_io,'(999a30)') 'Step', 'Position (cm)', &
-				chem_isos% name(chem_id(1:species)), 'rho (g/cm^3)', 'T (K)', 'u (cm/s)',&
-				'P (dyne/cm^2)', 'Etot (erg/g)', 'gamma1', 'u/c_s', 'q (erg/g)', &
-				 'mass flux', 'mom. flux', 'energy flux', &
+				write(profile_io,'(999a30)') 'Step', 'Position_cm', &
+				chem_isos% name(chem_id(1:species)), 'rho_g_p_cm_3', 'T_K', 'u_cm_p_s',&
+				'P_dyne_p_cm_2', 'Etot_erg_p_g', 'gamma1', 'u_over_c_s', 'q_erg_p_g', &
+				 'mass_flux', 'mom._flux', 'energy_flux', &
 				 'f1_blowout', 'f2_blowout', 'f3_blowout', &
 				 'f1_curvature', 'f2_curvature', 'f3_curvature'
 			 endif
@@ -4859,11 +4920,14 @@ module znd
       	 		call isolve( &
       	 			which_solver, num_vars, constp_derivs, t_start, vars, t_end, &
             		h, max_step_size, max_steps, &
-            		rtol, atol, itol, &
+            		rtol, atol, itol, y_min, y_max, &
             		constp_jacob, ijac, burn_sjac, nzmax, isparse, mljac, mujac, &
             		null_mas, imas, mlmas, mumas, &
             		null_solout, iout, &
-            		lapack_decsol, null_decsols, lrd, rpar_decsol, lid, ipar_decsol, &
+            		lapack_decsol, null_decsols, null_decsolblk, &
+                        lrd, rpar_decsol, lid, ipar_decsol, &
+                        caller_id_blk, nvar_blk, nz_blk, lblk, dblk, ublk, uf_lblk, uf_dblk, uf_ublk, &
+                        null_fcn_blk_dble, null_jac_blk_dble, &
             		work_isolve, lwork_isolve, iwork_isolve, liwork_isolve, &
             		lrpar, rpar, lipar, ipar, &
             		lout, idid)
@@ -5043,6 +5107,7 @@ module znd
 				output_profile = .false.
 				find_lburn = .false.
 				do_pathological = .false.
+				write(*,*) 'integrating with vdet =', v_det
 				call znd_integrate(t_start, t_end, num_steps, output_profile, profile_io, find_lburn)
 
         		write(*,'(a15,ES25.9)') 'u_x (cm/s)', vars(species+3)
@@ -5098,9 +5163,8 @@ module znd
 			call znd_integrate(t_start, t_end, num_steps, output_profile, profile_io, find_lburn)
 			
 			!Check the free electron ratio at the end to see if there were electron captures
-			call composition_info(species, chem_id, vars(1:species), xh, xhe, abar, zbar, z2bar, &
+			call composition_info(species, chem_id, vars(1:species), xh, xhe, Zm, abar, zbar, z2bar, &
             	ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-         	Zm = 1d0 - xh - xhe
 			Rho = vars(species+1)
 			logRho = log10(Rho)
 			T = vars(species+2)
@@ -5743,9 +5807,8 @@ module znd
        		write(*,*) 'Finding l_burn as a function of M_env...'
        		
        		t_b = t0
-       		call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+       		call composition_info(species, chem_id, xa, xh, xhe, Zm, abar, zbar, z2bar, &
             	ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-            Zm = 1d0 - xh - xhe
             !First calculate r_wd and grav given m_c:
 			r_wd = 7.62d-3*rsun*m_c**(-1.616)		!WD mass-radius relation
 			grav = (standard_cgrav*msun/rsun**2)*(1.72d4*m_c**4.23)	!surface gravity (cm/s^2)
@@ -6042,9 +6105,8 @@ module znd
 				rho_b = rho0/0.69	!Base of envelope relation from gamma=5/3
 				T_b = T0
 				
-				call composition_info(species, chem_id, xa, xh, xhe, abar, zbar, z2bar, &
+				call composition_info(species, chem_id, xa, xh, xhe, Zm, abar, zbar, z2bar, &
 					ye, mass_correction, xsum, dabar_dx, dzbar_dx, dmc_dx)
-				Zm = 1d0 - xh - xhe
 				logRho = log10(rho_b)
 				logT = log10(t_b)
 				call eosDT_get(eos_handle, Zm, Xh, abar, zbar, species, chem_id, net_iso, &
@@ -6437,7 +6499,6 @@ module znd
       
       	ierr = 0
       	deallocate(xa, vars, y_mass, dabar_dx, dzbar_dx, d_eps_nuc_dx, dmc_dx, rate_factors, &
-         	category_factors, rate_screened, reaction_eps_nuc, rate_raw, &
 			eps_nuc_categories, dxdt, d_dxdt_dRho, d_dxdt_dT, d_dxdt_dx, stat=ierr)
 		if (ierr /= 0) STOP "*** Deallocation error 1 ***"
         deallocate(rpar, ipar, work_isolve, iwork_isolve, work_net, &
